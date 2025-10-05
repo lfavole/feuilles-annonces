@@ -1,0 +1,23 @@
+{% extends "admin/change_form.html" %}
+{% load static %}
+
+{% block submit_buttons_bottom %}
+    {{ block.super }}
+    <h2>Aperçu des prochaines occurrences</h2>
+    <div id="errors">
+        Erreurs :
+        <ul id="errors-list"></ul>
+    </div>
+    <ul id="occurrences-list"></ul>
+{% endblock %}
+
+{% block extrastyle %}
+    {{ block.super }}
+    <script src="{% url 'javascript-catalog' %}"></script>
+{% endblock extrastyle %}
+
+{% block extrahead %}
+    {{ block.super }}
+    <script type="text/javascript">var GET_OCCURRENCES_URL = "{% url "admin:get_occurrences" %}";</script>
+    <script src="{% static "dates/recurrence.js" %}"></script>
+{% endblock %}

@@ -1,0 +1,6 @@
+form.add-dates-form table {
+    width: 100%;
+}
+form.add-dates-form table tr:nth-child(even) {
+    background: var(--darkened-bg);
+}

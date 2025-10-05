@@ -1,0 +1,49 @@
+{% extends "admin/change_list.html" %}
+{% load static %}
+
+{% block extrahead %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static "dates/add-dates.css" %}">
+<script src="{% static "dates/add-dates.js" %}"></script>
+{% endblock extrahead %}
+
+{% block result_list %}
+{% if cl.filter_specs.0.week is None %}
+    <div style="display: flex">
+        <a href="{{ current_week_link }}" style="margin: 0 auto">Display for current week ({{ current_week }})</a>
+    </div>
+{% else %}
+    <div style="display: flex">
+        <a href="{{ previous_week_link }}">&lt; Previous week ({{ previous_week }})</a>
+        <span style="margin: 0 auto">Current week: {{ current_week }}</span>
+        <a href="{{ next_week_link }}">Next week ({{ next_week }}) &gt;</a>
+    </div>
+{% endif %}
+{{ block.super }}
+{% endblock %}
+
+{% block sidebar %}
+{{ block.super }}
+<h2>Événements à ajouter</h2>
+<form class="add-dates-form" method="POST" action="{% url "admin:add_dates" %}">
+    {% csrf_token %}
+    <table>
+        {{ occurrences_form.as_table }}
+        <tr>
+            <td colspan="2" align="right"><input type="submit" value="OK"></td>
+        </tr>
+    </table>
+</form>
+{% comment %} <ul>
+    {% for occurrence in occurrences %}
+        <li>
+            <form method="POST" action="{% url "admin:dates_date_add" %}">
+                {% csrf_token %}
+                <input type="hidden" name="event_id" value="{{ occurrence.event_id }}">
+                <input type="hidden" name="start_date" value="{{ occurrence.start_date|date:input_format }}">
+                <input type="submit" value="Ajouter {{ occurrence }}">
+            </form>
+        </li>
+    {% endfor %}
+</ul> {% endcomment %}
+{% endblock sidebar %}
