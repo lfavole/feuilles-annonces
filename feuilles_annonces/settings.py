@@ -10,7 +10,10 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+import os
 from pathlib import Path
+
+import dj_database_url
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -23,9 +26,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = "django-insecure-si6(rudf%5&&=$c&)bdlazh9dpsik3#ibu=1w6j29@naaorjvd"
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get("DEBUG", "0") == "1"
 
-ALLOWED_HOSTS = ["127.0.0.1", "cba93bf33bbf-9520365609892817817.ngrok-free.app"]
+ALLOWED_HOSTS = ["127.0.0.1", "localhost", os.environ.get("HOST", "127.0.0.1")]
+CSRF_TRUSTED_ORIGINS = [
+    "http://" + os.environ.get("HOST", "127.0.0.1"),
+    "https://" + os.environ.get("HOST", "127.0.0.1"),
+]
 
 
 # Application definition
@@ -75,10 +82,7 @@ WSGI_APPLICATION = "feuilles_annonces.wsgi.application"
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
 DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
-    }
+    "default": dj_database_url.config(default="sqlite:///db.sqlite3"),
 }
 
 
@@ -116,6 +120,7 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
+STATIC_ROOT = BASE_DIR / "static/"
 STATIC_URL = "static/"
 STATICFILES_DIRS = [BASE_DIR / "dates/static"]
 
