@@ -17,7 +17,7 @@ ENV UV_PYTHON_INSTALL_DIR=/python
 COPY --from=build /app /app
 COPY --from=ghcr.io/astral-sh/uv:0.9 /uv /bin/
 COPY --from=build /python /python
-RUN apk add --no-cache nginx supervisor
+RUN apk add --no-cache nginx
 RUN mkdir -p /etc/nginx/conf.d
 COPY ./nginx.conf /etc/nginx/conf.d/default.conf
 WORKDIR /app

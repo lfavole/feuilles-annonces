@@ -51,8 +51,11 @@ document.addEventListener("DOMContentLoaded", async function() {
     const occurrencesList = document.getElementById("occurrences-list");
     const errorsContainer = document.getElementById("errors");
     const errorsList = document.getElementById("errors-list");
-    var form = document.getElementById("recurrence_form");
-    var fields = ["start_time", "_end_time", "recurrence"];
+    var form = document.querySelector("#content-main form");
+
+    function getFieldName(field) {
+        return form[field]?.previousElementSibling?.textContent?.replace(/:$/, "")?.trim() || field;
+    }
 
     function displayErrors(errors) {
         errorsList.innerHTML = "";
@@ -63,13 +66,13 @@ document.addEventListener("DOMContentLoaded", async function() {
         }
         errorsContainer.style.display = "";
         occurrencesList.style.display = "none";
-        if(!Array.isArray(errors))
+        if(errors?.constructor != Object)
             errors = {__all__: [{message: errors}]};
 
-        for(var [field, errors] of Object.entries(data.errors)) {
+        for(var [field, errors] of Object.entries(errors)) {
             for(var error of errors) {
                 var li = document.createElement("li");
-                li.textContent = (field == "__all__" ? "" : field + " : ") + error.message;
+                li.textContent = (field == "__all__" ? "" : getFieldName(field) + " : ") + error.message;
                 errorsList.appendChild(li);
             }
         }
@@ -80,17 +83,17 @@ document.addEventListener("DOMContentLoaded", async function() {
         if(updating) return;
         updating = true;
         try {
-            var response = await fetch(GET_OCCURRENCES_URL, {
+            var response = await fetch("../../get_occurrences", {
                 method: "POST",
                 body: new FormData(form),
             });
+            var data = await response.json();
         } catch(e) {
             displayErrors(e);
             return;
         } finally {
             updating = false;
         }
-        var data = await response.json();
         if(data.invalid) {
             displayErrors(data.errors);
             return;
@@ -99,35 +102,29 @@ document.addEventListener("DOMContentLoaded", async function() {
         while(occurrencesList.firstChild)
             occurrencesList.firstChild.remove();
         data.occurrences.forEach(function(occurrence) {
-            // const format = get_format(occurrence[0].includes("T") ? "DATETIME_INPUT_FORMATS" : "DATE_INPUT_FORMATS")[0];
-            const format = "%A %d %B %Y" + (occurrence[0].includes("T") ? " %H:%M:%S" : "");
+            // var start = occurrence.start || occurrence[0];
+            // var end = occurrence.end || occurrence[1];
+            // var name = occurrence.name;
+
+            // const DATE_FORMAT = "%A %d %B %Y";
+            // const TIME_FORMAT = "%H:%M:%S";
+
+            // var formattedStart = [new Date(start).strftime(DATE_FORMAT)];
+            // var formattedEnd = [new Date(end).strftime(DATE_FORMAT)];
+            // if(start?.includes("T"))
+            //     formattedStart.push(new Date(start).strftime(TIME_FORMAT));
+            // if(end?.includes("T"))
+            //     formattedEnd.push(new Date(end).strftime(TIME_FORMAT));
 
             const li = document.createElement("li");
-            li.textContent = (
-                new Date(occurrence[0]).strftime(format)
-                + (occurrence[1] && occurrence[1] != occurrence[0] ? " - " + new Date(occurrence[1]).strftime(format) : "")
-            );
+            // li.textContent = (
+            //     formattedStart[0]
+            //     + (formattedEnd[0] == formattedStart[0] ? "" : " - " + formattedEnd[0])
+            //     + (formattedStart[1] && formattedEnd[1] ? " " + formattedStart[1] + " - " + formattedEnd[1] : "")
+            //     + (name ? " - " + name : "")
+            // );
+            li.innerHTML = occurrence;  // occurrence may contain superscript ordinals e.g. 1<sup>er</sup>
             occurrencesList.appendChild(li);
-
-            // const exceptionButton = document.createElement("input");
-            // exceptionButton.type = "button";
-            // exceptionButton.value = "×";
-            // li.appendChild(exceptionButton);
-            // exceptionButton.addEventListener("click", function() {
-            //     var rec = recurrence.deserialize(form.recurrence.value);
-            //     var date = new Date(occurrence[0]);
-            //     date.setHours(0);
-            //     date.setMinutes(0);
-            //     date.setSeconds(0);
-            //     rec.exdates.push(date);
-            //     form.recurrence.value = rec.serialize();
-            //     if(form.recurrence.previousElementSibling.classList.contains("recurrence-widget")) {
-            //         form.recurrence.previousElementSibling.remove();
-            //         form.recurrence.classList.remove("hidden");
-            //         new recurrence.widget.Widget(form.recurrence.id, {});
-            //     }
-            //     updateOccurrences();
-            // });
         });
         if(!data.ended) {
             const li = document.createElement("li");
@@ -137,9 +134,13 @@ document.addEventListener("DOMContentLoaded", async function() {
     }
 
     // Écouteurs d'événements pour les champs de récurrence, de date de début et de date de fin
-    for(var field of fields) {
-        form[field].addEventListener("change", updateOccurrences);
-    }
+    form.addEventListener("change", updateOccurrences);
+
+    updating = false;
+    await updateOccurrences();
+
+    if(!window.recurrence) return;
+
     recurrence.widget.Widget.prototype.update = (function(oldUpdate) {
         return function() {
             var ret = oldUpdate.apply(this, arguments);
@@ -147,6 +148,4 @@ document.addEventListener("DOMContentLoaded", async function() {
             return ret;
         }
     })(recurrence.widget.Widget.prototype.update);
-    updating = false;
-    await updateOccurrences();
 });

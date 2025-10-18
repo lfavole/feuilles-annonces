@@ -9,40 +9,44 @@ from django.urls import path
 from django.utils import timezone
 from django.utils.formats import get_format
 from django.utils.translation import gettext_lazy as _
+from solo.admin import SingletonModelAdmin
 
 from .forms import get_occurrences_form_for
-from .models import Recurrence, Date
+from .models import Config, Date, FixedFeast, MovableFeast, Recurrence, Week
+
+
+class OccurrencesMixin:
+    def get_urls(self):
+        return [
+            path("get_occurrences", self.admin_site.admin_view(self._get_occurrences)),
+        ] + super().get_urls()
+
+    def _get_occurrences(self, request):
+        """Retourne les occurrences d'un événement sous forme de JSON."""
+        Form = self.get_form(request, change=True)
+        Form.validate_unique = lambda *_, **__: None
+        form = Form(request.POST)
+        if not form.is_valid():
+            return JsonResponse({"invalid": True, "errors": form.errors.get_json_data()}, status=400)
+        obj = form.instance
+        try:
+            occurrences = obj.get_occurrences(Week.get_current().start) if obj else []
+        except (KeyError, ValueError) as err:
+            if str(err) == "year 10000 is out of range":
+                raise
+            return JsonResponse({"invalid": True, "errors": f"{type(err).__name__}: {err}"}, status=400)
+        if occurrences and occurrences[0].start.year != occurrences[-1].end.year:
+            for occurrence in occurrences:
+                occurrence._display_year = True
+        return JsonResponse({
+            "occurrences": [str(occurrence) for occurrence in occurrences],
+            "ended": getattr(occurrences, "ended", True),
+        })
+
 
 @admin.register(Recurrence)
-class RecurrenceAdmin(admin.ModelAdmin):
+class RecurrenceAdmin(OccurrencesMixin, admin.ModelAdmin):
     list_display = ('title', 'start_time', 'end_time')
-
-    def get_urls(self):
-        urls = super().get_urls()
-        custom_urls = [
-            path('get_occurrences', self.admin_site.admin_view(self.get_occurrences), name='get_occurrences'),
-        ]
-        return custom_urls + urls
-
-    def get_occurrences(self, request):
-        """Retourne les occurrences d'un événement sous forme de JSON."""
-        class TestForm(forms.ModelForm):
-            class Meta:
-                model = self.model
-                fields = ["start_time", "_end_time", "recurrence"]
-
-        form = TestForm(request.POST)
-        if not form.is_valid():
-            return JsonResponse({"invalid": True, "errors": form.errors.get_json_data()}, status=500)
-        recurrence: Recurrence = form.instance
-        occurrences = recurrence.get_occurrences() if recurrence else []
-        return JsonResponse({
-            'occurrences': [
-                [date.isoformat() if date else date for date in (occurrence.start, occurrence.end)]
-                for occurrence in occurrences
-            ],
-            'ended': getattr(occurrences, "ended", True),
-        })
 
     def change_view(self, request, object_id, form_url='', extra_context=None):
         """Affiche les occurrences sur la page de modification de l'événement."""
@@ -51,11 +55,6 @@ class RecurrenceAdmin(admin.ModelAdmin):
         extra_context = extra_context or {}
         extra_context['occurrences'] = occurrences
         return super().change_view(request, object_id, form_url, extra_context=extra_context)
-
-    def render_change_form(self, request, context, **kwargs):
-        """Rendre le formulaire de changement avec les occurrences."""
-        context['occurrences'] = context.get('occurrences', [])
-        return super().render_change_form(request, context, **kwargs)
 
 
 class WeekFilter(admin.SimpleListFilter):
@@ -68,22 +67,10 @@ class WeekFilter(admin.SimpleListFilter):
             return None
         return ret
 
-    def current_week(self):
-        ret = timezone.now()
-        ret -= timedelta(days=ret.weekday())
-        return ret
-
     def week(self):
         if self.value() is None:
             return None
-        ret = timezone.now()
-        if self.value() != "":
-            try:
-                ret = timezone.datetime.strptime(self.value(), '%Y-%m-%d')
-            except ValueError:
-                pass
-        ret -= timedelta(days=ret.weekday())
-        return ret
+        return Week(self.value(), True)
 
     def choices(self, changelist):
         first = True
@@ -100,20 +87,18 @@ class WeekFilter(admin.SimpleListFilter):
             first = False
 
     def lookups(self, request, model_admin):
-        current_date = timezone.now().date()
-        current_date -= timedelta(days=current_date.weekday())
+        current_week = Week.get_current()
         weeks = []
         for i in range(-5, 1):
-            week_start = current_date + timedelta(weeks=i)
-            weeks.append((week_start.strftime('%Y-%m-%d'), f'Week of {week_start.strftime("%Y-%m-%d")}'))
+            week = current_week + timedelta(weeks=i)
+            weeks.append((week.start.strftime('%Y-%m-%d'), f'Week of {week.start.strftime("%Y-%m-%d")}'))
         return weeks
 
     def queryset(self, request, queryset):
-        week_start = self.week()
-        if week_start is None:
+        week = self.week()
+        if week is None:
             return queryset
-        week_end = week_start + timedelta(days=6)
-        return queryset.filter(start_date__range=(week_start, week_end))
+        return queryset.filter(start_date__range=(week.start, week.end))
 
 
 @admin.register(Date)
@@ -165,27 +150,21 @@ class DateAdmin(admin.ModelAdmin):
 
         ret.context_data['input_format'] = get_format("DATE_INPUT_FORMATS")[0]
         cl = ret.context_data["cl"]
-        current_week: datetime = cl.filter_specs[0].week() or cl.filter_specs[0].current_week()
+        current_week: datetime = cl.filter_specs[0].week() or Week.get_current()
         previous_week = current_week - timedelta(days=7)
         next_week = current_week + timedelta(days=7)
-        ret.context_data['previous_week'] = previous_week.strftime('%Y-%m-%d')
-        ret.context_data['previous_week_link'] = cl.get_query_string({self.list_filter[0].parameter_name: previous_week.strftime('%Y-%m-%d')})
-        ret.context_data['current_week'] = current_week.strftime('%Y-%m-%d')
+        ret.context_data['previous_week'] = str(previous_week)
+        ret.context_data['previous_week_link'] = cl.get_query_string({self.list_filter[0].parameter_name: str(previous_week)})
+        ret.context_data['current_week'] = str(current_week)
         ret.context_data['current_week_link'] = cl.get_query_string(remove=[self.list_filter[0].parameter_name])
-        ret.context_data['next_week'] = next_week.strftime('%Y-%m-%d')
-        ret.context_data['next_week_link'] = cl.get_query_string({self.list_filter[0].parameter_name: next_week.strftime('%Y-%m-%d')})
+        ret.context_data['next_week'] = str(next_week)
+        ret.context_data['next_week_link'] = cl.get_query_string({self.list_filter[0].parameter_name: str(next_week)})
 
         # Get all events
         events = Recurrence.objects.all()
         occurrences = []
         for event in events:
-            occurrences.extend(
-                event.get_occurrences(
-                    current_week,
-                    current_week + timedelta(weeks=1, days=-1),
-                    inc=True,
-                )
-            )
+            occurrences.extend(event.get_occurrences(current_week))
         result_list = ret.context_data["cl"].result_list
 
         occurrences = [
@@ -204,3 +183,18 @@ class DateAdmin(admin.ModelAdmin):
 
         # Call the parent changelist_view method with the updated context
         return ret
+
+
+@admin.register(Config)
+class ConfigAdmin(SingletonModelAdmin):
+    pass
+
+
+@admin.register(FixedFeast)
+class FixedFeastAdmin(OccurrencesMixin, admin.ModelAdmin):
+    pass
+
+
+@admin.register(MovableFeast)
+class MovableFeastAdmin(OccurrencesMixin, admin.ModelAdmin):
+    pass

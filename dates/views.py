@@ -6,6 +6,7 @@ from django.views.decorators.http import require_http_methods
 from icalendar import Alarm, Calendar, Event
 
 from .models import Recurrence as StoredEvent, Date
+from .pdfs.feuille_annonces import FeuilleAnnonces
 
 # Create your views here.
 
