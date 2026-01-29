@@ -5,7 +5,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from icalendar import Alarm, Calendar, Event
 
-from .models import Recurrence as StoredEvent, Date
+from .models import Recurrence as StoredEvent, Date, Week
 from .pdfs.feuille_annonces import FeuilleAnnonces
 
 # Create your views here.
@@ -35,7 +35,7 @@ def export(request):
     events = StoredEvent.objects.all()
     occurrences: list[Date] = []
     for event in events:
-        occurrences.extend(event.get_occurrences())
+        occurrences.extend(event.get_occurrences(Week.get_current()))
 
     now = datetime.datetime.now()
 

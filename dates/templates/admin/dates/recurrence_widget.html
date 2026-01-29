@@ -1,0 +1,113 @@
+<template id="recurrence-widget-template">
+    <div class="rrule-widget">
+        <div class="rrule-toolbar">
+            <div class="btn btn-add-inc">
+                <button type="button" class="btn btn-add-inc" @click="rules.push(serializeRule({}, 'INC'))">+ Inclure</button>
+                <button type="button" class="btn btn-add-inc btn-add-nlp" @click="rules.push(serializeRule(rrule.RRule.fromText(prompt('Règle en langage naturel :'), FRENCH), 'INC'))">✨</button>
+            </div>
+            <div class="btn btn-add-exc">
+                <button type="button" class="btn btn-add-exc" @click="rules.push(serializeRule({}, 'EXC'))">+ Exclure</button>
+                <button type="button" class="btn btn-add-exc btn-add-nlp" @click="rules.push(serializeRule(rrule.RRule.fromText(prompt('Règle en langage naturel :'), FRENCH), 'EXC'))">✨</button>
+            </div>
+
+            <div class="btn-preview-container" @click.away="showPreview = false">
+                <button type="button" class="btn btn-preview" @click="showPreview = !showPreview">
+                    Aperçu
+                    <span class="preview-arrow-icon" x-text="showPreview ? '▲' : '▼'"></span>
+                </button>
+
+                <div class="preview-tooltip" x-show="showPreview">
+                    <div class="preview-title">Dates</div>
+                    <div class="preview-content">
+                        <template x-if="!occurrences.length">
+                            <div class="preview-content-empty">Aucune occurrence générée</div>
+                        </template>
+                        <template x-for="occ in occurrences" :key="occ">
+                            <div class="preview-item" x-text="occ"></div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <template x-for="(rule, index) in rules" :key="rule.id">
+            <div class="rule-card" :class="rule.type">
+                <div class="rule-header" @click="editingId = (editingId == rule.id ? null : rule.id)">
+                    <span x-text="getRuleLabel(rule)"></span>
+                    <span class="tag" x-show="!isUseful(rule)">Inutile</span>
+                    <span class="tag" x-show="isAmbiguous(rule)">Ambigu</span>
+                    <button type="button" class="delete-button" @click.stop="removeRule(index)">&times;</button>
+                </div>
+
+                <div class="rule-editor" x-show="editingId == rule.id">
+                    <div class="editor-row">
+                        <div class="field-group">
+                            <label class="field-label">Fréquence</label>
+                            <select class="input-select" x-model="rule.freq">
+                                <option value="ONCE">Date unique</option>
+                                <option value="DAILY">Quotidien</option>
+                                <option value="WEEKLY">Hebdomadaire</option>
+                                <option value="MONTHLY">Mensuel</option>
+                                <option value="YEARLY">Annuel</option>
+                            </select>
+                        </div>
+                        <div class="field-group" x-show="rule.freq != 'ONCE'">
+                            <label class="field-label">Intervalle</label>
+                            <input type="number" min="1" class="input-number" x-model.number="rule.interval">
+                        </div>
+                        <div class="field-group" x-show="rule.freq == 'ONCE'">
+                            <label class="field-label">Date</label>
+                            <input type="date" class="input-date" x-model="rule.dtstart">
+                        </div>
+                    </div>
+
+                    <div class="ambiguity-alert" x-show="isAmbiguous(rule)">
+                        ⚠️ <strong>Série instable :</strong> Sans jour précis, la série dépend de la date système.
+                    </div>
+
+                    <div x-show="rule.freq != 'ONCE'" class="multi-grid grid-2">
+                        <div class="field-group">
+                            <label class="field-label">Jours semaine</label>
+                            <div class="multi-grid grid-7">
+                                <template x-for="day in daysList">
+                                    <button type="button" class="multi-btn" :class="rule.byweekday.includes(day.v) ? 'active' : ''" @click="toggleValue(rule.byweekday, day.v)" x-text="day.l"></button>
+                                </template>
+                            </div>
+                        </div>
+                        <div class="field-group">
+                            <label class="field-label">Positions</label>
+                            <div class="multi-grid grid-5">
+                                <template x-for="p in posList">
+                                    <button type="button" class="multi-btn" :class="rule.bysetpos.includes(p.v) ? 'active' : ''" @click="toggleValue(rule.bysetpos, p.v)" x-text="p.l"></button>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+                    <div x-show="rule.freq != 'ONCE'" class="field-group">
+                        <label class="field-label">Jours du mois</label>
+                        <div class="multi-grid grid-2">
+                            <div class="multi-grid grid-7">
+                                <template x-for="d in 31">
+                                    <button type="button" class="multi-btn" :class="rule.bymonthday.includes(d) ? 'active' : ''" @click="toggleValue(rule.bymonthday, d)" x-text="d"></button>
+                                </template>
+                            </div>
+                            <div class="multi-grid grid-7">
+                                <template x-for="d in [...Array(31).keys()].map(x => -x - 1)">
+                                    <button type="button" class="multi-btn" :class="rule.bymonthday.includes(d) ? 'active' : ''" @click="toggleValue(rule.bymonthday, d)" x-text="d"></button>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+                    <div x-show="rule.freq != 'ONCE'" class="field-group">
+                        <label class="field-label">Mois de l'année</label>
+                        <div class="multi-grid grid-6">
+                            <template x-for="(month, i) in FRENCH.monthNames">
+                                <button type="button" class="multi-btn" :class="rule.bymonth.includes(i + 1) ? 'active' : ''" @click="toggleValue(rule.bymonth, i + 1)" x-text="month"></button>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </template>
+    </div>
+</template>

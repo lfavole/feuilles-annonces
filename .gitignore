@@ -13,8 +13,8 @@ wheels/
 db.sqlite3
 
 # media files and static files
-media/
-static/
+/media/
+/static/
 
 # uv lock file
 uv.lock

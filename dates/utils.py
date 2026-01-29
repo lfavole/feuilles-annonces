@@ -2,8 +2,10 @@ import datetime as dt
 import re
 from html import unescape
 
+from dateutil import rrule
+from django.core.exceptions import ValidationError
 from django.utils.dateformat import format
-from django.utils.timezone import get_current_timezone
+from django.utils.timezone import get_current_timezone, is_naive, make_aware
 
 
 def striptags(value: str):
@@ -109,3 +111,87 @@ def _render_parts(all_parts, *, weekday=True, year=False, natural=False, natural
         raise RuntimeError(f"Unexpected type: {type}")
 
     return " ".join([part for part in (rendered.get("date"), rendered.get("time")) if part])
+
+def serialize_rruleset(rule_or_recurrence):
+    """
+    Serialize a `Rule` or `Recurrence` instance into an RFC 2445 string.
+    """
+    if rule_or_recurrence is None:
+        return None
+
+    def serialize_date(date):
+        if is_naive(date):
+            date = make_aware(date)
+        return date.astimezone(dt.timezone.UTC).strftime("%Y%m%dT%H%M%SZ")
+
+    def serialize_rule(rule):
+        parts = []
+
+        # Frequency is mandatory
+        parts.append(f"FREQ={Rule.frequencies[rule.freq]}")
+
+        if rule.interval != 1:
+            parts.append(f"INTERVAL={int(rule.interval)}")
+
+        if rule.wkst:
+            wkst_val = getattr(rule.wkst, 'number', rule.wkst)
+            parts.append(f"WKST={Rule.weekdays[wkst_val]}")
+
+        if rule.count is not None:
+            parts.append(f"COUNT={rule.count}")
+        elif rule.until is not None:
+            parts.append(f"UNTIL={serialize_date(rule.until)}")
+
+        if rule.byday:
+            days = []
+            for d in rule.byday:
+                d = to_weekday(d)
+                # Utilisation d'une f-string conditionnelle pour l'index
+                prefix = str(d.index) if d.index else ""
+                days.append(f"{prefix}{Rule.weekdays[d.number]}")
+            parts.append(f"BYDAY={','.join(days)}")
+
+        # Traitement des autres paramètres (bymonth, bymonthday, etc.)
+        for param in [p for p in Rule.byparams if p != 'byday']:
+            value_list = getattr(rule, param, None)
+            if value_list:
+                val_str = ",".join(str(n) for n in value_list)
+                parts.append(f"{param.upper()}={val_str}")
+
+        return ";".join(parts)
+
+    # Validation
+    try:
+        _ = rrule.rruleset(rule_or_recurrence)
+    except Exception as error:
+        raise ValidationError(error)
+
+    # Normalisation vers une instance Recurrence
+    obj = rule_or_recurrence
+    if isinstance(obj, (rrule.rrule, dt.date)):
+        newobj = rrule.rruleset()
+        if isinstance(obj, dt.date):
+            newobj.rdate(obj)
+        else:
+            newobj.rrule(obj)
+        newobj = obj
+
+    items = []
+
+    # # Construction des lignes iCalendar
+    # if obj.dtstart:
+    #     items.append(f"DTSTART:{serialize_date(obj.dtstart)}")
+    # if obj.dtend:
+    #     items.append(f"DTEND:{serialize_date(obj.dtend)}")
+
+    items.extend([f"RRULE:{serialize_rule(r)}" for r in obj._rrule])
+    items.extend([f"EXRULE:{serialize_rule(r)}" for r in obj._exrule])
+    items.extend([f"RDATE:{serialize_date(d)}" for d in obj._rdate])
+    items.extend([f"EXDATE:{serialize_date(d)}" for d in obj._exdate])
+
+    return "\n".join(items)
+
+
+class rruleset(rrule.rruleset):
+    def __str__(self):
+        return serialize_rruleset(self)

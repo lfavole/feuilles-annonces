@@ -38,7 +38,10 @@ class FeuilleAnnonces(PDF):
 
         self.start_columns(ncols=2)
 
-        self.draw_header(format_date_or_time(week.start, week.end, weekday=False, year=True, natural=True))
+        self.draw_header(
+            format_date_or_time(week.start, week.end, weekday=False, year=True, natural=True)
+            .replace("1<sup>er</sup>", "1er")
+        )
 
         line_height = self.font_size * 1.25
 

@@ -1,13 +1,16 @@
 import datetime as dt
 from functools import total_ordering
+from html import escape
 from string import Template
 from typing import Generator, Union
 
+from dateutil.rrule import rrulestr
 from django.db import models
-from django.utils.timezone import get_current_timezone, now
-from recurrence.fields import RecurrenceField
+from django.utils.safestring import mark_safe
+from django.utils.timezone import get_current_timezone, make_aware, make_naive, now
 from solo.models import SingletonModel
 
+from .fields import RecurrenceField
 from .liturgical_calendar import default_translations, get_liturgical_year, get_movable_feasts_for
 from .ordinal import ordinal
 from .utils import date_to_datetime, format_date_or_time
@@ -108,21 +111,18 @@ class OccurrencesList(list["Date"]):
 
 
 class HasOccurrences:
-    def get_occurrences(self, start: dt.date | None = None, end: dt.date | None = None, inc=False, limit=20):
+    def get_occurrences(self, start: dt.date | DateRange, end: dt.date | None = None, inc=False, limit=20):
         """Retourne toutes les occurrences d'un événement récurrent."""
-        if not start:
-            start = Week.get_current().start
-
         if isinstance(start, DateRange):
             week = start
             start = week.start
             end = week.end
             inc = True
 
-        if isinstance(start, dt.date):
-            start = date_to_datetime(start)
-        if isinstance(end, dt.date):
-            end = date_to_datetime(end)
+        if isinstance(start, dt.datetime):
+            start = start.date()
+        if isinstance(end, dt.datetime):
+            end = end.date()
 
         def real_get_occurrences():
             for occurrence in self._get_occurrences(start, end):
@@ -131,7 +131,7 @@ class HasOccurrences:
 
         return OccurrencesList.from_iterable(real_get_occurrences(), limit)
 
-    def _get_occurrences(self, start: dt.datetime, end: dt.datetime | None) -> Generator["Date", None, None]:
+    def _get_occurrences(self, start: dt.date, end: dt.date | None) -> Generator["Date", None, None]:
         if not hasattr(self, "recurrence"):
             raise NotImplementedError(
                 "To be able to use the default implementation of _get_occurrences, there must be "
@@ -139,16 +139,19 @@ class HasOccurrences:
                 + "Please add one or override _get_occurrences."
             )
 
-        occurrences_list = self.recurrence.to_dateutil_rruleset(start)
-        for item in (start, end):
-            if item and item in occurrences_list._rdate:
-                occurrences_list._rdate.remove(item)
-        for occurrence in occurrences_list:
-            if start and occurrence < start:
+        if isinstance(start, dt.datetime) or isinstance(end, dt.datetime):
+            raise TypeError("start or end can't be datetimes, they must be dates")
+
+        occurrences_list = rrulestr(self.recurrence, dtstart=start, forceset=True)
+        for occurrence in occurrences_list.xafter(dt.datetime.combine(start, dt.time.min), inc=True):
+            if start and occurrence.date() < start:
                 continue
-            if end and occurrence > end:
+            if end and occurrence.date() > end:
                 break
-            yield Date(event=self, start_date=occurrence.date())
+            if isinstance(self, Recurrence):
+                yield Date(event=self, start_date=occurrence.date())
+            else:
+                yield Date(event=Recurrence(title=self.name), start_date=occurrence.date())
 
 
 class Date(HasOccurrences, models.Model):
@@ -225,16 +228,30 @@ class Date(HasOccurrences, models.Model):
     def __str__(self):
         return f"{self.title} on {format_date_or_time(self.start, self.end, year=getattr(self, '_display_year', False))}"
 
+    def __html__(self):
+        return mark_safe(f"{escape(self.title)} on {format_date_or_time(self.start, self.end, year=getattr(self, '_display_year', False))}")
+
     def contains(self, start: dt.date | None = None, end: dt.date | None = None, inc=False):
-        self_start = date_to_datetime(self.start)
-        self_end = date_to_datetime(self.end)
-        start = date_to_datetime(start) if start else None
-        end = date_to_datetime(end) if end else None
-        if start and (self_start < start if inc else self_start <= start):
-            return False
-        if end and (self_end > end if inc else self_end >= end):
-            return False
-        return True
+        if isinstance(start, dt.datetime) and isinstance(end, dt.datetime):
+            self_start = date_to_datetime(self.start)
+            self_end = date_to_datetime(self.end)
+            start = date_to_datetime(start) if start else None
+            end = date_to_datetime(end) if end else None
+            if start and (self_start < start if inc else self_start <= start):
+                return False
+            if end and (self_end > end if inc else self_end >= end):
+                return False
+            return True
+        else:
+            self_start = self.start.date() if isinstance(self.start, dt.datetime) else self.start
+            self_end = self.end.date() if isinstance(self.end, dt.datetime) else self.end
+            start = start.date() if isinstance(start, dt.datetime) else start
+            end = end.date() if isinstance(end, dt.datetime) else end
+            if start and (self_start < start if inc else self_start <= start):
+                return False
+            if end and (self_end > end if inc else self_end >= end):
+                return False
+            return True
 
     def _get_occurrences(self, *args, **kwargs):
         return [self]
@@ -247,7 +264,7 @@ class Recurrence(HasOccurrences, models.Model):
     recurrence = RecurrenceField()
 
     def clean(self):
-        self.occurrences = self.get_occurrences()
+        self.get_occurrences(Week.get_current())
 
     def __str__(self):
         return self.title
@@ -262,11 +279,9 @@ class MovableFeast(HasOccurrences, models.Model):
     slug = models.SlugField(unique=True)
     display_name = models.CharField(max_length=200)
 
-    def _get_occurrences(self, start: dt.datetime, end: dt.datetime | None):
+    def _get_occurrences(self, start: dt.date, end: dt.date | None):
         if self.slug not in default_translations:
             return  # avoid iterating until the end of the date range (year 10000)
-        start = start.date()
-        end = end.date() if end else None
         liturgical_year = get_liturgical_year(start)
         ended = False
         while not ended:
@@ -285,3 +300,14 @@ class MovableFeast(HasOccurrences, models.Model):
                     start_date=date,
                 )
             liturgical_year += 1
+
+
+class Bulletin(models.Model):
+    class BulletinType(models.TextChoices):
+        ANNOUNCEMENTS = "ANNOUNCEMENTS", "Announcements"
+        MASSES = "MASSES", "Masses"
+
+    title = models.CharField(max_length=100)
+    type = models.CharField(max_length=15, choices=BulletinType.choices)
+    days_before = models.IntegerField(default=0)
+    days_after = models.IntegerField(default=0)

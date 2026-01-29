@@ -138,14 +138,4 @@ document.addEventListener("DOMContentLoaded", async function() {
 
     updating = false;
     await updateOccurrences();
-
-    if(!window.recurrence) return;
-
-    recurrence.widget.Widget.prototype.update = (function(oldUpdate) {
-        return function() {
-            var ret = oldUpdate.apply(this, arguments);
-            updateOccurrences();
-            return ret;
-        }
-    })(recurrence.widget.Widget.prototype.update);
 });

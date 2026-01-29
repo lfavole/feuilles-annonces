@@ -48,14 +48,6 @@ class OccurrencesMixin:
 class RecurrenceAdmin(OccurrencesMixin, admin.ModelAdmin):
     list_display = ('title', 'start_time', 'end_time')
 
-    def change_view(self, request, object_id, form_url='', extra_context=None):
-        """Affiche les occurrences sur la page de modification de l'événement."""
-        event = self.get_object(request, object_id)
-        occurrences = event.get_occurrences() if event else []
-        extra_context = extra_context or {}
-        extra_context['occurrences'] = occurrences
-        return super().change_view(request, object_id, form_url, extra_context=extra_context)
-
 
 class WeekFilter(admin.SimpleListFilter):
     title = 'Week'
@@ -120,7 +112,7 @@ class DateAdmin(admin.ModelAdmin):
                 continue
 
             try:
-                date_obj = timezone.datetime.strptime(date_str, "%Y%m%d")
+                date_obj = timezone.make_aware(datetime.strptime(date_str, "%Y%m%d"))
             except ValueError:
                 raise Http404
 
