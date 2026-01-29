@@ -14,6 +14,8 @@ import os
 from pathlib import Path
 
 import dj_database_url
+from debug_toolbar.settings import PANELS_DEFAULTS
+from django.http import HttpRequest
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -45,6 +47,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.sessions",
     "django.contrib.staticfiles",
+    "debug_toolbar",
     "recurrence",
     "solo",
     "dates",
@@ -56,8 +59,36 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "debug_toolbar.middleware.DebugToolbarMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+]
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": "WARNING",
+    },
+}
+
+
+def show_toolbar(request: HttpRequest):
+    return request.user.is_superuser
+
+
+DEBUG_TOOLBAR_CONFIG = {
+    "SHOW_TOOLBAR_CALLBACK": "feuilles_annonces.settings.show_toolbar",
+}
+DEBUG_TOOLBAR_PANELS = [
+    *PANELS_DEFAULTS,
+    "feuilles_annonces.panels.ErrorPanel",
 ]
 
 ROOT_URLCONF = "feuilles_annonces.urls"

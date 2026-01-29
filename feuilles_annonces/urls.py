@@ -23,6 +23,7 @@ from django.views.static import serve
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    path("debug/", include("debug_toolbar.urls")),
     path("jsi18n", JavaScriptCatalog.as_view(packages=["recurrence"]), name="javascript-catalog"),
     path("", include("dates.urls")),
 ]
