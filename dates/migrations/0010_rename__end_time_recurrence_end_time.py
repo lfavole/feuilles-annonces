@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("dates", "0009_alter_recurrence_end_time"),
+        ("dates", "0009_fixedfeast_movablefeast"),
     ]
 
     operations = [
