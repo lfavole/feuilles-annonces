@@ -1,6 +1,8 @@
 import datetime
 
 from django.http import HttpResponse
+from django.shortcuts import render
+from django.contrib.auth.decorators import login_required
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from icalendar import Alarm, Calendar, Event
@@ -9,6 +11,10 @@ from .models import Recurrence as StoredEvent, Date, Week
 from .pdfs.feuille_annonces import FeuilleAnnonces
 
 # Create your views here.
+
+@login_required
+def edit(request):
+    return render(request, "dates/edit.html")
 
 @csrf_exempt
 @require_http_methods(["GET", "PROPFIND"])

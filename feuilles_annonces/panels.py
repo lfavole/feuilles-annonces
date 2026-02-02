@@ -1,6 +1,4 @@
-import html
 import sys
-from urllib.parse import urlencode
 
 from debug_toolbar.decorators import render_with_toolbar_language, require_show_toolbar
 from debug_toolbar.panels import Panel
@@ -8,9 +6,7 @@ from debug_toolbar.toolbar import DebugToolbar
 from django.core.handlers import exception
 from django.core.handlers.exception import response_for_exception
 from django.http import Http404, HttpRequest, HttpResponse
-from django.template.loader import render_to_string
 from django.urls import path
-from django.utils.safestring import SafeString
 from django.utils.translation import gettext_lazy as _
 from django.views.debug import ExceptionReporter, technical_404_response
 from django.views.decorators.clickjacking import xframe_options_exempt
@@ -36,11 +32,12 @@ class ErrorPanel(Panel):
         return self.get_stats().get("exc_info") is not None
 
     def generate_stats(self, request, response):
-        self.toolbar.store()  # ensure that store_id exists
+        self.toolbar.init_store()  # ensure that request_id exists
+        td = self.toolbar.__dict__
         self.record_stats(
             {
                 "request": request,
-                "store_id": self.toolbar.store_id,
+                "request_id": self.toolbar.request_id,
             }
         )
 
@@ -89,7 +86,7 @@ def error_panel_view(request):
     """
     Render the contents of the error.
     """
-    toolbar = DebugToolbar.fetch(request.GET["store_id"])
+    toolbar = DebugToolbar.fetch(request.GET["request_id"])
     if toolbar is None:
         return HttpResponse()
 

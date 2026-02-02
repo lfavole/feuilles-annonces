@@ -12,7 +12,17 @@ from django.utils.translation import gettext_lazy as _
 from solo.admin import SingletonModelAdmin
 
 from .forms import get_occurrences_form_for
-from .models import Config, Date, FixedFeast, MovableFeast, Recurrence, Week
+from .models import Bulletin, Celebrant, Config, Date, FixedFeast, MovableFeast, Recurrence, Week
+
+
+@admin.register(Bulletin)
+class BulletinAdmin(admin.ModelAdmin):
+    pass
+
+
+@admin.register(Celebrant)
+class CelebrantAdmin(admin.ModelAdmin):
+    pass
 
 
 class OccurrencesMixin:
@@ -96,6 +106,7 @@ class WeekFilter(admin.SimpleListFilter):
 @admin.register(Date)
 class DateAdmin(admin.ModelAdmin):
     list_filter = (WeekFilter,)
+    exclude = ("ignored",)
 
     def get_urls(self):
         urls = super().get_urls()

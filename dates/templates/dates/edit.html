@@ -1,0 +1,164 @@
+{% load solo_tags %}
+{% load static %}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Générateur d'Annonces Paroissiales</title>
+    <link rel="stylesheet" href="{% static "dates/edit.css" %}">
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/tinymce@8/tinymce.min.js"></script>
+    <script src="{% static "dates/persist.js" %}"></script>
+    <script src="{% static "dates/x-tinymce.js" %}"></script>
+    <script src="{% static "dates/edit.js" %}"></script>
+</head>
+<body x-data="announcementApp">
+    {% csrf_token %}
+
+    <!-- BARRE DE NAVIGATION -->
+    <header class="no-print">
+        <div class="nav-container">
+            <div class="view-switch">
+                <button @click="view = 'weekly'" :class="view == 'weekly' ? 'btn-nav active' : 'btn-nav'">Feuille</button>
+                <button @click="view = 'monthly'" :class="view == 'monthly' ? 'btn-nav active' : 'btn-nav'">Tableau</button>
+            </div>
+            <div class="date-controls">
+                <button @click="view == 'weekly' ? changeWeek(-7) : changeMonth(-1)" class="btn-arrow">◀</button>
+                <span class="date-display" x-text="view == 'weekly' ? formatRange(currentStartDate) : currentMonthDate.toLocaleDateString('fr-FR', {month:'long', year:'numeric'})"></span>
+                <button @click="view == 'weekly' ? changeWeek(7) : changeMonth(1)" class="btn-arrow">▶</button>
+            </div>
+            <div>
+                <button @click="restoreIgnoredEvents = true" class="btn-nav">Restaurer ignorés</button>
+                <button @click="window.print()" class="btn-print">Imprimer</button>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <template x-if="!events">
+            <div>Chargement...</div>
+        </template>
+
+        <!-- VUE FEUILLE D'ANNONCES -->
+        <template x-if="view == 'weekly' && events">
+            <div class="print-container">
+                <div class="main-header">
+                    {% get_solo "dates.Config" as config %}
+                    <img src="{{ config.logo.url }}" class="header-logo">
+                    <div class="header-text">
+                        <div>Paroisse Saint-Marcellin de l'Embrunais</div>
+                        <div>Paroisse Saint-Dominique du Savinois</div>
+                        <h1>Sous nos clochers</h1>
+                        <p x-text="formatRange(currentStartDate)"></p>
+                    </div>
+                </div>
+
+                <!-- NOTE GENERALE -->
+                <div class="global-note-container tinymce-area" x-tinymce.inline="globalNote"></div>
+
+                <template x-for="day in calendarDays" :key="day.dateKey">
+                    <div>
+                        <template x-for="event in getEventsForDay(day.dateKey)" :key="event.start_date ? (event.id || event.title + event.start_date) : event">
+                            <div>
+                                <template x-if="event == 'DAY' || event == 'DAY\''">
+                                    <div>
+                                        <h3 class="day-label" x-text="day.name + ' ' + day.formattedDate"></h3>
+                                    </div>
+                                </template>
+                                <template x-if="event == 'ORD'">
+                                    <div class="sunday-separator" x-text="getOrdinalSunday(day.dateKey)"></div>
+                                </template>
+                                <template x-if="event == 'ADD'">
+                                    <button @click="addEvent(day.dateKey)" class="no-print btn-add-manual">+ Ajouter manuellement</button>
+                                </template>
+                                <template x-if="event.start_date && !event.ignored">
+                                    <div class="group" @dblclick="event.id = -1">
+                                        <div class="event-row">
+                                            <div class="event-content" :disabled="!event.id" :class="{'cancelled': event.isCancelled}">
+                                                <div class="event-hours">
+                                                    <input type="time" class="event-time" :disabled="!event.id" x-model="event.start_time"><!--
+                                                    --><input type="time" class="event-time" :disabled="!event.id" x-model="event.end_time">
+                                                </div>
+                                                <span x-text="event.isCancelled ? 'PAS DE' : ''"></span>
+                                                <input type="text" class="event-title" :disabled="!event.id" x-model="event.title" @dblclick="!event.id && ($event.preventDefault(), event.id = -1)">
+                                                <template x-if="event.id && celebrants && needsCelebrant(event)">
+                                                    <select x-model="event.celebrant" class="select-priest">
+                                                        <option value="" :selected="event.celebrant == null">Prêtre</option>
+                                                        <template x-for="c in celebrants" :key="c.id">
+                                                            <option :value="c.id" :selected="event.celebrant == c.id" x-text="c.name"></option>
+                                                        </template>
+                                                    </select>
+                                                </template>
+                                            </div>
+                                            <div class="no-print event-actions">
+                                                <button x-show="event.id && !event.note" @click="$el.closest('.group').querySelector('.tinymce-area').focus()" class="btn-action">📝</button>
+                                                <button @click="event.cancelled = !event.cancelled" class="btn-action">🚫</button>
+                                                <button x-show="!event.id" @click="event.id = -1" class="btn-action btn-add">+</button>
+                                                <button x-show="!event.id" @click="event.ignored = true" class="btn-action btn-ignore">-</button>
+                                                <button x-show="event.id" @click="events.splice(events.indexOf(event), 1)" class="btn-action btn-remove">×</button>
+                                            </div>
+                                        </div>
+                                        <div class="tinymce-area" :class="!event.note ? 'empty' : ''" :disabled="!event.id" x-tinymce.inline="event.note"></div>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+            </div>
+        </template>
+
+        <!-- TABLEAU MENSUEL -->
+        <template x-if="view == 'monthly' && events">
+            <div class="monthly-view">
+                <h2 x-text="'Planning des Messes - ' + currentMonthDate.toLocaleDateString('fr-FR', {month:'long', year:'numeric'})"></h2>
+                <table class="mass-table">
+                    <thead>
+                        <tr>
+                            <th colspan="2" class="location-col" style="width: 12rem; border-right: 2px solid #cbd5e1;">Secteur / Localité</th>
+                            <template x-for="(w, index) in monthWeekends" :key="index">
+                                <th style="background-color: rgba(238, 242, 255, 0.5); border-left: 2px solid #eef2ff;" x-text="(w.date.getDay() == 6 ? 'SAM ' : 'DIM ') + w.label"></th>
+                            </template>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="parish in parishes" :key="parish.name">
+                            <template x-for="(loc, idx) in parish.locations" :key="parish.name + loc">
+                                <tr>
+                                    <template x-if="idx == 0">
+                                        <td :rowspan="parish.locations.length" class="parish-col" x-text="parish.name"></td>
+                                    </template>
+                                    <td class="location-col" style="border-right: 2px solid #cbd5e1;" x-text="loc"></td>
+
+                                    <template x-for="w in monthWeekends" :key="w.key">
+                                        <td style="border-left: 1px solid #e2e8f0;" x-data="{ mass: getMassForCell(w.key, loc) }" x-show="mass">
+                                            <div class="cell-time" x-text="mass.start_time"></div>
+                                            <div class="cell-priest" x-text="celebrants.find(c => mass.celebrant == c.id).name || '—'"></div>
+                                        </td>
+                                    </template>
+                                </tr>
+                            </template>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+        </template>
+
+        <div class="modal-overlay" x-show="restoreIgnoredEvents">
+            <div class="modal-card">
+                <button class="btn-action btn-remove" @click="restoreIgnoredEvents = false">×</button>
+                <h4>Restaurer des événements ignorés</h4>
+                <ul>
+                    <template x-for="event in (events || []).filter(e => e.ignored)">
+                        <li>
+                            <span x-text="event.title"></span>
+                            <button class="btn-action btn-ignore" @click="event.ignored = false">-</button>
+                        </li>
+                    </template>
+                </ul>
+            </div>
+        </div>
+    </main>
+</body>
+</html>

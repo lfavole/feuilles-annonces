@@ -16,6 +16,11 @@ from .ordinal import ordinal
 from .utils import date_to_datetime, format_date_or_time
 
 
+class Celebrant(models.Model):
+    name = models.CharField("Nom", unique=True, max_length=100)
+    abbreviation = models.CharField("Abréviation", unique=True, blank=True, max_length=10)
+
+
 @total_ordering
 class DateRange:
     def __init__(self, start, end):
@@ -85,6 +90,9 @@ class DateManager(models.Manager):
 
     def get_for_current_week(self):
         return self.get_for_week(Week.get_current())
+
+    def get_queryset(self):
+        return super().get_queryset().filter(ignored=False)
 
 
 class Config(SingletonModel):
@@ -163,6 +171,11 @@ class Date(HasOccurrences, models.Model):
     _start_time = models.TimeField(db_column="start_time", null=True, blank=True)
     _end_date = models.DateField(db_column="end_date", null=True, blank=True)
     _end_time = models.TimeField(db_column="end_time", null=True, blank=True)
+
+    note = models.TextField("Note", blank=True)
+    celebrant = models.ForeignKey(Celebrant, null=True, on_delete=models.SET_NULL)
+    cancelled = models.BooleanField("Annulé", default=False)
+    ignored = models.BooleanField(default=False)
 
     @property
     def title(self) -> str:
