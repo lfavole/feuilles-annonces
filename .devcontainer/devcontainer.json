@@ -1,0 +1,12 @@
+{
+	"build": {
+		"dockerfile": "../Dockerfile"
+	},
+	"features": {
+		"ghcr.io/cirolosapio/devcontainers-features/alpine-git:0": {},
+		"ghcr.io/cirolosapio/devcontainers-features/alpine-gpg:0": {},
+		"ghcr.io/cirolosapio/devcontainers-features/alpine-openssh:0": {}
+	},
+	"forwardPorts": [8000],
+	"postStartCommand": "DEBUG=1 uv run manage.py runserver"
+}
