@@ -1,0 +1,11 @@
+{% extends "admin/change_form.html" %}
+
+{% block admin_change_form_document_ready %}
+    {{ block.super }}
+    <script>
+        document.getElementById("id_verses").setAttribute("x-model.fill", "versesJson");
+        document.getElementById("id_chorus").setAttribute("x-model.fill", "chorus");
+        document.getElementById("id_chorus_after").setAttribute("x-model.fill", "chorusAfter");
+        document.getElementById("{{ opts.model_name }}_form").setAttribute("x-data", "songEditor()");
+    </script>
+{% endblock %}

@@ -1,0 +1,10 @@
+<div class="song-editor">
+    <ul class="errorlist" x-show="!isCorrect">
+        <li>
+            La structure saisie est incorrecte (ex: refrain mal placé).
+            <input type="button" @click="autoNormalize()" value="Normaliser">
+        </li>
+    </ul>
+    <textarea rows="25" x-model="raw" @input="handleInput()"></textarea>
+    <input type="button" x-show="!isNormalized && isCorrect" @click="autoNormalize()" value="Normaliser">
+</div>

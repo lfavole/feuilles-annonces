@@ -1,0 +1,533 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Générateur Liturgique Pro</title>
+<script src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/tinymce@8/tinymce.min.js"></script>
+<script src="{% static 'dates/persist.js' %}"></script>
+<script src="{% static 'dates/x-tinymce.js' %}"></script>
+<style>
+:root {
+    --primary: #2563eb;
+    --accent: #4f46e5;
+    --danger: #ef4444;
+    --bg: #f8fafc;
+}
+body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: #1e293b;
+    margin: 0;
+    padding: 20px;
+    line-height: 1.5;
+}
+.admin-panel {
+    background: white;
+    padding: 20px;
+    border-radius: 12px;
+    margin-bottom: 30px;
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+    border: 1px solid #e2e8f0;
+}
+.tab-btn {
+    padding: 8px 16px;
+    border-radius: 6px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-weight: 600;
+    color: #64748b;
+    transition: 0.2s;
+}
+.tab-btn.active {
+    background: var(--primary);
+    color: white;
+}
+.sheet-container {
+    display: flex;
+    justify-content: center;
+    padding-bottom: 50px;
+}
+.sheet {
+    background: white;
+    width: 21cm;
+    min-height: 29.7cm;
+    padding: 2cm;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+}
+.editable-title-input {
+    font-size: 1.4rem;
+    font-weight: 800;
+    margin-bottom: 0.5rem;
+    border: none;
+    border-bottom: 1px dashed #cbd5e1;
+    width: 100%;
+    outline: none;
+    background: transparent;
+}
+.header-input {
+    width: 100%;
+    border: none;
+    border-bottom: 1px dashed #e2e8f0;
+    text-align: center;
+    font-style: italic;
+    background: transparent;
+    outline: none;
+    resize: none;
+}
+.block {
+    margin-bottom: 2rem;
+    position: relative;
+}
+.block-tools {
+    position: absolute;
+    left: -50px;
+    top: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    opacity: 0;
+    transition: 0.2s;
+}
+.block:hover .block-tools {
+    opacity: 1;
+}
+.lyrics-area {
+    margin-top: 10px;
+    font-family: 'Georgia', serif;
+}
+.refrain {
+    font-weight: bold;
+    font-style: italic;
+    margin: 10px 0;
+    border-left: 3px solid #cbd5e1;
+    padding-left: 15px;
+}
+.verse {
+    margin-bottom: 12px;
+    white-space: pre-wrap;
+}
+.modal-bg {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(2px);
+}
+.modal {
+    background: white;
+    padding: 25px;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 600px;
+    max-height: 85vh;
+    overflow-y: auto;
+}
+.form-group {
+    margin-bottom: 15px;
+}
+.form-group label {
+    display: block;
+    font-weight: bold;
+    margin-bottom: 5px;
+    font-size: 0.9rem;
+}
+input:not([type="checkbox"]), select, textarea {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    box-sizing: border-box;
+}
+input[type="checkbox"] {
+    width: auto;
+    cursor: pointer;
+}
+.search-input {
+    background: #f1f5f9;
+    border: none;
+    padding: 10px 15px;
+    margin-bottom: 15px;
+}
+[x-cloak] {
+    display: none !important;
+}
+.loading-overlay {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 40px;
+    font-style: italic;
+    color: #64748b;
+}
+@media print {
+    .no-print, .block-tools, .modal-bg, .admin-panel {
+        display: none !important;
+    }
+    body {
+        padding: 0;
+        background: white;
+    }
+    .sheet {
+        box-shadow: none;
+        width: 100%;
+        padding: 1.5cm;
+    }
+    .header-input, .editable-title-input {
+        border: none !important;
+    }
+}
+</style>
+</head>
+<body x-data="liturgyApp()">
+    {% csrf_token %}
+    <template x-if="songLibrary === null || categories === null || sheets === null">
+        <div class="loading-overlay">
+            <p>Chargement des ressources...</p>
+        </div>
+    </template>
+    <div x-show="songLibrary !== null && categories !== null && sheets !== null" x-cloak>
+        <div class="no-print admin-panel">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 style="margin: 0;">⛪ Liturgie Manager</h2>
+                <div style="display: flex; gap: 10px;">
+                    <button class="tab-btn active">Mes Feuilles</button>
+                    <a href="/admin/chants/song/" target="_blank" class="tab-btn">Gérer les chants (Admin)</a>
+                </div>
+            </div>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <template x-if="sheets !== null">
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <template x-for="(sheet, index) in sheets" :key="sheet.id">
+                            <button class="tab-btn" :class="activeSheetIdx === index ? 'active' : ''" @click="setActiveSheet(index)" x-text="sheet.name"></button>
+                        </template>
+                    </div>
+                </template>
+                <button class="tab-btn" style="background: #f1f5f9;" @click="showNewModal = true">+ Nouveau</button>
+            </div>
+        </div>
+        <template x-if="currentSheet">
+            <div class="sheet-container">
+                <div class="sheet" x-show="blocks != null">
+                    <div style="text-align: center; border-bottom: 2px solid #1e293b; padding-bottom: 20px; margin-bottom: 30px;">
+                        <input type="text" class="editable-title-input" style="text-align: center; font-size: 2rem;" x-model="currentSheet.name">
+                        <textarea class="header-input" rows="2" x-model="currentSheet.header_info"></textarea>
+                    </div>
+                    <template x-if="blocks != null">
+                        <template x-for="(block, bIdx) in blocks.sort((a, b) => a.order - b.order)" :key="block.id">
+                            <div class="block">
+                                <div class="block-tools no-print">
+                                    <button @click="moveBlock(bIdx, -1)">↑</button>
+                                    <button @click="moveBlock(bIdx, 1)">↓</button>
+                                    <button @click="removeBlock(bIdx)" style="color: var(--danger);">×</button>
+                                </div>
+                                <input type="text" class="editable-title-input" x-model="block.title">
+                                <template x-if="block.block_type === 'text'">
+                                    <div x-tinymce.inline="block.content"></div>
+                                </template>
+                                <template x-if="block.block_type === 'song'">
+                                    <div class="lyrics-area">
+                                        <div class="no-print" style="margin-bottom: 10px;">
+                                            <button @click="openVersesPicker(block)" style="font-size: 0.75rem; cursor: pointer; background: #e2e8f0; padding: 4px 8px; border-radius: 4px;">⚙️ Sélectionner les couplets</button>
+                                        </div>
+                                        <template x-if="getSong(block.song)">
+                                            <div x-data="{ song: getSong(block.song) }">
+                                                <div x-show="song.refrain_pos === 'before'" class="refrain" x-text="song.chorus"></div>
+                                                <template x-for="(vIdx, index) in block.selected_verses" :key="vIdx">
+                                                    <div>
+                                                        <div class="verse" x-text="song.verses[vIdx]"></div>
+                                                        <div x-show="song.refrain_pos === 'after' && index === 0" class="refrain" x-text="song.chorus"></div>
+                                                    </div>
+                                                </template>
+                                            </div>
+                                        </template>
+                                        <template x-if="!getSong(block.song)">
+                                            <div style="font-style: italic; color: #94a3b8;">Chargement du chant...</div>
+                                        </template>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+                    </template>
+                    <div class="no-print" style="border: 2px dashed #cbd5e1; padding: 20px; text-align: center; margin-top: 20px;">
+                        <button class="tab-btn" @click="addTextBlock()">+ Bloc Texte</button>
+                        <button class="tab-btn" @click="showSongPicker = true">+ Bloc Chant</button>
+                    </div>
+                </div>
+                <div class="loading-overlay" x-show="blocks == null">
+                    <p>Chargement des ressources...</p>
+                </div>
+            </div>
+        </template>
+        <div class="modal-bg" x-show="showVersesPicker" x-cloak>
+            <div class="modal" @click.away="showVersesPicker = false">
+                <template x-if="activeVerseBlock && getSong(activeVerseBlock.song)">
+                    <div x-data="{ song: getSong(activeVerseBlock.song) }">
+                        <h3 x-text="'Couplets : ' + song.title"></h3>
+                        <div style="display: grid; gap: 10px; margin-top: 15px;">
+                            <template x-for="(verseText, idx) in song.verses" :key="idx">
+                                <label style="display: flex; gap: 12px; background: #f8fafc; padding: 12px; border-radius: 8px; cursor: pointer; border: 1px solid #e2e8f0; align-items: flex-start;">
+                                    <input type="checkbox" :checked="activeVerseBlock.selected_verses.includes(idx)" @change="toggleVerse(idx)" style="margin-top: 4px;">
+                                    <div style="flex: 1;">
+                                        <div style="font-weight: bold; font-size: 0.8rem; margin-bottom: 4px;">Couplet <span x-text="idx + 1"></span></div>
+                                        <div style="font-size: 0.85rem; color: #475569; white-space: pre-wrap;" x-text="verseText"></div>
+                                    </div>
+                                </label>
+                            </template>
+                        </div>
+                        <button class="tab-btn active" style="margin-top: 20px; width: 100%;" @click="showVersesPicker = false">Valider</button>
+                    </div>
+                </template>
+            </div>
+        </div>
+        <div class="modal-bg" x-show="showSongPicker" x-cloak>
+            <div class="modal" @click.away="showSongPicker = false">
+                <h3>Ajouter un chant</h3>
+                <input type="text" class="search-input" placeholder="Filtrer par titre ou paroles..." x-model.debounce.300ms="searchQuery" @input="fetchSearchResults()">
+                <template x-if="categories !== null">
+                    <div>
+                        <template x-for="category in categories" :key="category.id">
+                            <div style="margin-bottom: 15px;" x-show="searchResults.some(s => s.category === category.id)">
+                                <h4 x-text="category.name" style="margin: 5px 0; color: var(--primary);"></h4>
+                                <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                                    <template x-for="song in searchResults.filter(s => s.category === category.id)" :key="song.id">
+                                        <button @click="addSongToSheet(song)" class="tab-btn" style="background: #f1f5f9; font-size: 0.8rem;" x-text="song.title"></button>
+                                    </template>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+            </div>
+        </div>
+        <div class="modal-bg" x-show="showNewModal" x-cloak>
+            <div class="modal" @click.away="showNewModal = false">
+                <h3>Nouvelle Célébration</h3>
+                <div class="form-group">
+                    <label>Date :</label>
+                    <input type="date" x-model="config.date">
+                </div>
+                <div class="form-group" x-show="isDateSaturday(config.date)">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                        <input type="checkbox" x-model="config.isAnticipated">
+                        Messe anticipée (Samedi soir)
+                    </label>
+                </div>
+                <div x-show="isLoadingAELF" style="text-align: center; padding: 10px; font-style: italic; color: var(--primary);">
+                    Chargement des textes AELF...
+                </div>
+                <button class="tab-btn active" @click="generateFullMass()" :disabled="isLoadingAELF">Créer la structure</button>
+            </div>
+        </div>
+    </div>
+<script>
+document.addEventListener("alpine:init", async () => {
+    Alpine.data("liturgyApp", () => {
+        let app = {
+            sheets: null,
+            blocks: null,
+            activeSheetIdx: null,
+            searchQuery: '',
+            searchResults: [],
+            showNewModal: false,
+            showVersesPicker: false,
+            showSongPicker: false,
+            isLoadingAELF: false,
+            activeVerseBlock: null,
+            categories: null,
+            songLibrary: [],
+            config: {
+                date: new Date().toISOString().split('T')[0],
+                isAnticipated: false
+            },
+            generateId() {
+                return -Math.random() * 2**53;
+                // return 'block_' + Math.random().toString(36).substr(2, 9);
+            },
+            isDateSaturday(dateStr) {
+                if (!dateStr) return false;
+                const d = new Date(dateStr);
+                return d.getDay() === 6;
+            },
+            get currentSheet() {
+                return (this.activeSheetIdx !== null && this.sheets && this.sheets[this.activeSheetIdx]) ? this.sheets[this.activeSheetIdx] : null;
+            },
+            getSong(id) {
+                const song = this.songLibrary.find(s => s.id == id);
+                if (!song) {
+                    this.fetchSong(id);
+                    return null;
+                }
+                return song;
+            },
+            async fetchSong(id) {
+                if (this.songLibrary.some(s => s.id == id)) return;
+                try {
+                    const song = await getPersistentData(`/api/songs/${id}/`);
+                    if (song) {
+                        this.songLibrary.push(song);
+                    }
+                } catch (e) {
+                    console.error("Erreur lors de la récupération du chant", id, e);
+                }
+            },
+            async fetchSearchResults() {
+                const params = this.searchQuery ? {parameters: `?q=${encodeURIComponent(this.searchQuery)}`} : {};
+                this.searchResults = await getPersistentData('/api/songs/', params);
+                this.searchResults.forEach(s => {
+                    if (!this.songLibrary.some(ls => ls.id == s.id)) {
+                        this.songLibrary.push(s);
+                    }
+                });
+            },
+            async setActiveSheet(index) {
+                this.activeSheetIdx = index;
+                const sheet = this.sheets[index];
+                if (sheet && sheet.id !== 0) {
+                    this.blocks = null;
+                    this.blocks = await getPersistentData("/api/blocks/", {parameters: `?sheet=${sheet.id}`});
+                    while (true) {
+                        let edited = false;
+                        let lastOrder = null;
+                        for (let b of this.blocks.sort((a, b) => a.order - b.order)) {
+                            if (lastOrder != null && lastOrder >= b.order) {
+                                b.order++;
+                                edited = true;
+                            }
+                            lastOrder = b.order;
+                        }
+                        if (!edited)
+                            break;
+                    }
+                    // const sheetBlocks = await getPersistentData("/api/blocks/", {parameters: `?sheet=${sheet.id}`});
+                    // this.blocks = this.blocks.filter(b => b.sheet != sheet.id).concat(sheetBlocks);
+                    // sheetBlocks.forEach(b => {
+                    //     if (b.block_type === 'song' && b.song) {
+                    //         this.fetchSong(b.song);
+                    //     }
+                    // });
+                }
+            },
+            openVersesPicker(block) {
+                this.activeVerseBlock = block;
+                this.showVersesPicker = true;
+            },
+            toggleVerse(vIdx) {
+                if (!this.activeVerseBlock) return;
+                let verses = [...this.activeVerseBlock.selected_verses];
+                const pos = verses.indexOf(vIdx);
+                if (pos > -1) {
+                    verses.splice(pos, 1);
+                } else {
+                    verses.push(vIdx);
+                }
+                this.activeVerseBlock.selected_verses = verses.sort((a, b) => a - b);
+            },
+            addSongToSheet(song) {
+                if (!this.currentSheet) return;
+                if (!this.songLibrary.some(s => s.id == song.id)) {
+                    this.songLibrary.push(song);
+                }
+                const newBlock = {
+                    id: this.generateId(),
+                    sheet: this.currentSheet.id,
+                    block_type: 'song',
+                    title: song.title,
+                    song: song.id,
+                    selected_verses: [0],
+                    order: this.blocks.length
+                };
+                this.blocks.push(newBlock);
+                this.showSongPicker = false;
+                this.searchQuery = '';
+            },
+            addTextBlock() {
+                if (!this.currentSheet) return;
+                this.blocks.push({
+                    id: this.generateId(),
+                    sheet: this.currentSheet.id,
+                    block_type: 'text',
+                    title: 'Nouvelle Section',
+                    content: 'Texte éditable...',
+                    order: this.blocks.length
+                });
+            },
+            moveBlock(idx, dir) {
+                const current = this.blocks;
+                const newIdx = idx + dir;
+                if (newIdx < 0 || newIdx >= current.length) return;
+                const item1 = current[idx];
+                const item2 = current[newIdx];
+                [item1.order, item2.order] = [item2.order, item1.order];
+            },
+            removeBlock(idx) {
+                const blockToRemove = this.blocks[idx];
+                this.blocks.splice(idx, 1);
+            },
+            async generateFullMass() {
+                this.isLoadingAELF = true;
+                const dateObj = new Date(this.config.date);
+                const dateAELF = this.config.date;
+                const dayLabel = this.config.isAnticipated ? "Messe anticipée du Dimanche" : "Messe du Dimanche";
+                const dateStr = dateObj.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+                let aelfData = { lectures: [], psaume: '' };
+                try {
+                    const response = await fetch(`https://api.aelf.org/v1/messes/${dateAELF}/france`);
+                    const json = await response.json();
+                    const office = json.messes[0];
+                    if (office) {
+                        office.lectures.forEach(l => {
+                            if (l.type === 'lecture_1') aelfData.lectures.push({ title: 'Première Lecture', text: l.contenu });
+                            if (l.type === 'psaume') aelfData.psaume = l.contenu;
+                            if (l.type === 'evangile') aelfData.lectures.push({ title: 'Évangile', text: l.contenu });
+                        });
+                    }
+                } catch (e) {
+                    console.error("AELF Error", e);
+                }
+                const newSheet = {
+                    id: 0,
+                    name: dayLabel + " " + dateObj.toLocaleDateString('fr-FR'),
+                    date: this.config.date,
+                    header_info: "Paroisse Sainte-Marie\n" + dateStr
+                };
+                if (this.sheets === null) this.sheets = [];
+                this.sheets.push(newSheet);
+                this.activeSheetIdx = this.sheets.length - 1;
+                const initialContent = [
+                    { title: 'Accueil', content: 'Mot d\'accueil du célébrant...' },
+                    { title: 'Prière pénitentielle', content: 'Seigneur, prends pitié de nous...' },
+                    ...aelfData.lectures.map(l => ({ title: l.title, content: l.text })),
+                    { title: 'Psaume', content: aelfData.psaume },
+                    { title: 'Prière universelle', content: 'Refrain : Ô Seigneur écoute-nous...' }
+                ];
+                initialContent.forEach((c, i) => {
+                    this.blocks.push({
+                        id: this.generateId(),
+                        sheet: 0,
+                        block_type: 'text',
+                        title: c.title,
+                        content: c.content,
+                        order: i
+                    });
+                });
+                this.showNewModal = false;
+                this.isLoadingAELF = false;
+            }
+        };
+        app = Alpine.reactive(app);
+        getPersistentData('/api/categories/').then(e => app.categories = e);
+        getPersistentData('/api/sheets/').then(e => app.sheets = e);
+        app.fetchSearchResults();
+        return app;
+    });
+});
+</script>
+</body>
+</html>

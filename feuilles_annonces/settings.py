@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     "recurrence",
     "rest_framework",
     "solo",
+    "chants",
     "dates",
     "feuilles_annonces",
 ]

@@ -1,0 +1,13 @@
+.song-editor {
+    width: 100%;
+}
+.song-editor .errorlist {
+    margin-left: 0;
+    padding-left: 0;
+}
+.song-editor textarea {
+    box-sizing: border-box;
+    width: 100%;
+    flex-shrink: 1;
+    resize: vertical;
+}
