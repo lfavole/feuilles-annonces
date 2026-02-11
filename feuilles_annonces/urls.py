@@ -20,11 +20,22 @@ from django.contrib import admin
 from django.urls import include, path
 from django.views.i18n import JavaScriptCatalog
 from django.views.static import serve
+from rest_framework import routers
+
+from chants.router import register as register_chants
+from dates.router import register as register_dates
+
+router = routers.DefaultRouter()
+register_chants(router)
+register_dates(router)
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    path("api-auth/", include("rest_framework.urls", namespace="rest_framework")),
+    path("api/", include(router.urls)),
     path("debug/", include("debug_toolbar.urls")),
     path("jsi18n", JavaScriptCatalog.as_view(packages=["recurrence"]), name="javascript-catalog"),
+    path("", include("chants.urls")),
     path("", include("dates.urls")),
 ]
 if settings.DEBUG:
