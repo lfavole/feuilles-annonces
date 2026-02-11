@@ -25,7 +25,10 @@ class ErrorPanel(Panel):
         exc_info = self.get_stats().get("exc_info")
         if exc_info is None:
             return _("No error")
-        return f"{exc_info[0].__name__}: {exc_info[1]}"
+        try:
+            return f"{exc_info[0].__name__}: {exc_info[1]}"
+        except AttributeError:
+            return f"{exc_info[0]}: {exc_info[1]}"
 
     @property
     def has_content(self):
