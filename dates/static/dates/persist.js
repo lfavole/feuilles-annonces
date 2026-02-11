@@ -9,7 +9,7 @@ async function getPersistentData(
 ) {
     // Récupération initiale des données
     const resp = await fetch(endpoint + parameters, { headers });
-    let data = Alpine.reactive(await resp.json());
+    let data = Alpine.reactive((await resp.json()).map(Alpine.reactive));
 
     function setDefaultsAndFix(item) {
         if (defaultsIn && item[defaultsIn]) {
